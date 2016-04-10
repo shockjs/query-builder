@@ -50,7 +50,7 @@ $query.select('id, email');
 
 The column names being selected may include table prefixes and/or column aliases, like you do when writing raw SQL queries. For example,
 
-```
+```javascript
 query.select(['user.id AS user_id', 'email']);
 
 // equivalent to:
@@ -150,7 +150,7 @@ query.where("status=status");
 
 When using parameter binding, you may call params() or addParams() to specify parameters separately.
 
-```
+```javascript
 query.where('status=:status')
     .addParams({':status': status});
 ```
@@ -172,7 +172,7 @@ query.where({
 As you can see, the query builder is intelligent enough to properly handle values that are nulls or arrays.
 
 You can also use sub-queries with hash format like the following:
-```
+```javascript
 userQuery = new Query().select('id').from('user');
 
 // ...WHERE `id` IN (SELECT `id` FROM `user`)
