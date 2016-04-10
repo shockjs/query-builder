@@ -33,6 +33,23 @@ LIMIT 10
 
 Info: You usually mainly work with Query instead of QueryBuilder. The latter is invoked by the former implicitly when you call one of the query methods. QueryBuilder is the class responsible for generating DBMS-dependent SQL statements (e.g. quoting table/column names differently) from DBMS-independent Query objects.
 
+## Connection settings
+
+To open a connection.
+```javascript
+Query.connect({
+    "host": "xxxx",
+    "user": "xxxx",
+    "password": "xxxx",
+    "database": "xxxx"
+});
+```
+
+To close the connection.
+```javascript
+Query.end();
+```
+
 ## Building Queries
 To build a Query object, you call different query building methods to specify different parts of a SQL query. The names of these methods resemble the SQL keywords used in the corresponding parts of the SQL statement. For example, to specify the FROM part of a SQL query, you would call the from() method. All the query building methods return the query object itself, which allows you to chain multiple calls together.
 
