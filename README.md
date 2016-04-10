@@ -45,7 +45,7 @@ query.select(['id', 'email']);
 
 // equivalent to:
 
-$query.select('id, email');
+query.select('id, email');
 ```
 
 The column names being selected may include table prefixes and/or column aliases, like you do when writing raw SQL queries. For example,
@@ -102,11 +102,11 @@ query.from('user');
 
 You can specify the table(s) being selected from in either a string or an array. The table names may contain schema prefixes and/or table aliases, like you do when writing raw SQL statements. For example,
 ```javascript
-$query->from(['public.user u', 'public.post p']);
+query.from(['public.user u', 'public.post p']);
 
 // equivalent to:
 
-$query->from('public.user u, public.post p');
+query.from('public.user u, public.post p');
 ```
 
 If you are using the array format, you can also use the array keys to specify the table aliases, like the following:
@@ -210,7 +210,7 @@ You can use andWhere() or orWhere() to append additional conditions to an existi
 var status = 10;
 var search = 'search';
 
-$query->where({'status': status});
+query.where({'status': status});
 
 if (search.length > 0) {
     query.andWhere(['like', 'title', search]);
