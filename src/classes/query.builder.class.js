@@ -1,6 +1,7 @@
 import _ from 'lodash';
 import {Query} from './query.class';
 import {SORT_DESC} from '../constants';
+import strtr from 'phpjs/strtr';
 
 export class QueryBuilder {
 
@@ -8,9 +9,19 @@ export class QueryBuilder {
 
   constructor(db) {
 
+    /**
+     * Connection the database connection.
+     */
     this._db = db;
+    /**
+     * The separator between different fragments of a SQL statement.
+     * Defaults to an empty space. This is mainly used by [[build()]] when generating a SQL statement.
+     */
     this._separator = " ";
-    this._typeMap = [];
+    /**
+     * Array map of query condition to builder methods.
+     * These methods are used by [[buildCondition]] to build SQL conditions from array syntax.
+     */
     this._conditionBuilders = {
       'NOT': 'buildNotCondition',
       'AND': 'buildAndCondition',
@@ -28,6 +39,15 @@ export class QueryBuilder {
     };
   }
 
+  /**
+   * Generates a SELECT SQL statement from a [[Query]] object.
+   * @param {Query} query the [[Query]] object from which the SQL statement will be generated.
+   * @param {Object} params the parameters to be bound to the generated SQL statement. These parameters will
+   * be included in the result with the additional parameters generated during the query building process.
+   * @return {Array} the generated SQL statement (the first array element) and the corresponding
+   * parameters to be bound to the SQL statement (the second array element). The parameters returned
+   * include those provided in `$params`.
+   */
   build(query, params={}) {
 
     console.log(query);
@@ -54,6 +74,13 @@ export class QueryBuilder {
     return [sql, params];
   }
 
+  /**
+   * @param {Array|Object} columns
+   * @param {Object} params the binding parameters to be populated
+   * @param {boolean} distinct
+   * @param {string} selectOption
+   * @return {string} the SELECT clause built from [[Query::select]].
+   */
   buildSelect(columns, params, distinct, selectOption) {
     
     var select = distinct ? 'SELECT DISTINCT' : 'SELECT';
@@ -92,6 +119,11 @@ export class QueryBuilder {
     return select + ' ' + columns.join(', ');
   }
 
+  /**
+   * @param {Array|Object} tables
+   * @param {Object} params the binding parameters to be populated
+   * @return {String} the FROM clause built from [[Query::from]].
+   */
   buildFrom(tables, params) {
     if (_.isEmpty(tables)) {
       return '';
@@ -102,6 +134,12 @@ export class QueryBuilder {
     return 'FROM ' + tables.join(', ');
   }
 
+  /**
+   * @param {Array} joins
+   * @param {Object} params the binding parameters to be populated
+   * @return {String} the JOIN clause built from [[Query::join]].
+   * @throws Exception if the joins parameter is not in proper format
+   */
   buildJoin(joins, params) {
     if (_.isEmpty(joins)) {
       return '';
@@ -114,7 +152,7 @@ export class QueryBuilder {
       // 0:join type, 1:join table, 2:on-condition (optional)
       var {0: joinType, 1:table} = join;
       var tables = this._quoteTableNames(table, params);
-      //table = reset($tables); @todo figure out conversion.
+      table = tables.shift(); //@todo figure out conversion.
       joins[i] = `${joinType} ${table}`;
       if (join[2] !== undefined) {
         var condition = this.buildCondition(join[2], params);
@@ -127,6 +165,13 @@ export class QueryBuilder {
     return joins.join(this._separator);
   }
 
+  /**
+   * Quotes table names passed
+   *
+   * @param {Array|Object} tables
+   * @param {Object} params
+   * @return {Array|Object}
+   */
   _quoteTableNames(tables, params) {
     Object.keys(tables).forEach ((i) => {
 
@@ -154,20 +199,161 @@ export class QueryBuilder {
     return tables;
   }
 
+  /**
+   * @param {String|Array} condition
+   * @param {Object} params the binding parameters to be populated
+   * @return {String} the WHERE clause built from [[Query::where]].
+   */
   buildWhere(condition, params) {
     var where = this.buildCondition(condition, params);
     return where === '' ? '' : 'WHERE ' + where;
   }
 
+  /**
+   * @param {Array|Object} columns
+   * @return {String} the GROUP BY clause
+   */
   buildGroupBy(columns) {
     return _.isEmpty(columns) ? '' : 'GROUP BY ' + this.buildColumns(columns);
   }
 
+  /**
+   * @param {String|Array|Object} condition
+   * @param {Object} params the binding parameters to be populated
+   * @return string the HAVING clause built from [[Query::having]].
+   */
   buildHaving(condition, params) {
     var having = this.buildCondition(condition, params);
     return having === '' ? '' : 'HAVING ' + having;
   }
 
+  /**
+   * Builds the ORDER BY and LIMIT/OFFSET clauses and appends them to the given SQL.
+   * @param {String} sql the existing SQL (without ORDER BY/LIMIT/OFFSET)
+   * @param {Array|Object} orderBy the order by columns. See [[Query::orderBy]] for more details on how to specify this parameter.
+   * @param {int} limit the limit number. See [[Query::limit]] for more details.
+   * @param {int} offset the offset number. See [[Query::offset]] for more details.
+   * @return {String} the SQL completed with ORDER BY/LIMIT/OFFSET (if any)
+   */
+  buildOrderByAndLimit(sql, orderBy, limit, offset) {
+    orderBy = this.buildOrderBy(orderBy);
+    if (orderBy !== '') {
+      sql += this._separator + orderBy;
+    }
+    limit = this.buildLimit(limit, offset);
+    if (limit !== '') {
+      sql += this._separator + limit;
+    }
+    return sql;
+  }
+
+  /**
+   * @param {Array|Object} columns
+   * @return {String} the ORDER BY clause built from [[Query::$orderBy]].
+   */
+  buildOrderBy(columns) {
+    if (_.isEmpty(columns)) {
+      return '';
+    }
+    var orders = [];
+    Object.keys(columns).forEach((name) => {
+      orders.push(this._db.quoteColumnName(name) + (columns[name] === SORT_DESC ? ' DESC' : ''));
+    });
+
+    return 'ORDER BY ' + orders.join(', ');
+  }
+
+  /**
+   * @param {int} limit
+   * @param {int} offset
+   * @return {String} the LIMIT and OFFSET clauses
+   */
+  buildLimit(limit, offset) {
+    var sql = '';
+    if (this.hasLimit(limit)) {
+      sql = 'LIMIT ' + limit;
+    }
+    if (this.hasOffset(offset)) {
+      sql += ' OFFSET ' + offset;
+    }
+
+    return _.trimStart(sql);
+  }
+
+  /**
+   * Checks to see if the given limit is effective.
+   * @param {String} limit the given limit
+   * @return {boolean} whether the limit is effective
+   */
+  hasLimit(limit) {
+    return /^\d+$/.test(limit);
+  }
+
+  /**
+   * Checks to see if the given offset is effective.
+   * @param {String} offset the given offset
+   * @return {boolean} whether the offset is effective
+   */
+  hasOffset(offset) {
+    return /^\d+$/.test(offset) && offset != 0;
+  }
+
+  /**
+   * @param {Array|Object} unions
+   * @param {Object} params the binding parameters to be populated
+   * @return {String} the UNION clause built from [[Query::union]].
+   */
+  buildUnion(unions, params) {
+    if (_.isEmpty(unions)) {
+      return '';
+    }
+
+    var result = '';
+
+    unions.forEach((union, i) => {
+      var query = union['query'];
+      if (query instanceof Query) {
+        var data = this.build(query, params);
+        unions[i]['query'] = data[0];
+        params = data[1];
+      }
+
+      result += 'UNION ' + (union['all'] ? 'ALL ' : '') + '( ' + unions[i]['query'] + ' ) ';
+    });
+
+    return result.trim();
+  }
+
+  /**
+   * Processes columns and properly quotes them if necessary.
+   * It will join all columns into a string with comma as separators.
+   * @param {String|Array|Object} columns the columns to be processed
+   * @return {String} the processing result
+   */
+  buildColumns(columns) {
+    if (!_.isArray(columns)) {
+      if (columns.indexOf(columns, '(') !== -1) {
+        return columns;
+      } else {
+        columns = columns.split('/\s*,\s*/').filter((value) => value.length > 0);
+      }
+    }
+    columns.forEach((column, i) => {
+      if (column.indexOf('(') === -1) {
+        columns[i] = this._db.quoteColumnName(column);
+      }
+    });
+
+    return _.isArray(columns) ? columns.join(', ') : columns;
+  }
+
+  /**
+   * Parses the condition specification and generates the corresponding SQL expression.
+   * @param {String|Array|Object} condition the condition specification. Please refer to [[Query::where()]]
+   * on how to specify a condition.
+   * @param {Object} params the binding parameters to be populated
+   * @return {String} the generated SQL expression
+   */
   buildCondition(condition, params) {
 
     var method;
@@ -195,23 +381,12 @@ export class QueryBuilder {
     }
   }
 
-  buildColumns(columns) {
-    if (!_.isArray(columns)) {
-      if (columns.indexOf(columns, '(') !== -1) {
-        return columns;
-      } else {
-        columns = columns.split('/\s*,\s*/').filter((value) => value.length > 0);
-      }
-    }
-    columns.forEach((column, i) => {
-      if (column.indexOf('(') === -1) {
-        columns[i] = this._db.quoteColumnName(column);
-      }
-    });
-
-    return _.isArray(columns) ? columns.join(', ') : columns;
-  }
-
+  /**
+   * Creates a condition based on column-value pairs.
+   * @param {Array|Object} condition the condition specification.
+   * @param {Object} params the binding parameters to be populated
+   * @return {String} the generated SQL expression
+   */
   buildHashCondition(condition, params) {
     var parts = [];
     Object.keys(condition).forEach((column) => {
@@ -236,6 +411,13 @@ export class QueryBuilder {
     return parts.length === 1 ? parts[0] : '(' + parts.join(') AND (') + ')';
   }
 
+  /**
+   * Connects two or more SQL expressions with the `AND` or `OR` operator.
+   * @param {String} operator the operator to use for connecting the given operands
+   * @param {Array} operands the SQL expressions to connect.
+   * @param {Object} params the binding parameters to be populated
+   * @return {String} the generated SQL expression
+   */
   buildAndCondition(operator, operands, params)
   {
     var parts = [];
@@ -254,6 +436,14 @@ export class QueryBuilder {
     }
   }
 
+  /**
+   * Inverts an SQL expressions with `NOT` operator.
+   * @param {String} operator the operator to use for connecting the given operands
+   * @param {Array} operands the SQL expressions to connect.
+   * @param {Array} params the binding parameters to be populated
+   * @return {String} the generated SQL expression
+   * @throws Error if wrong number of operands have been given.
+   */
   buildNotCondition(operator, operands, params) {
     if (operands.length != 1) {
       throw new Error(`Operator '${operator}' requires exactly one operand.`);
@@ -270,6 +460,15 @@ export class QueryBuilder {
     return `${operator} (${operand})`;
   }
 
+  /**
+   * Creates an SQL expressions with the `BETWEEN` operator.
+   * @param {String} operator the operator to use (e.g. `BETWEEN` or `NOT BETWEEN`)
+   * @param {Array} operands the first operand is the column name. The second and third operands
+   * describe the interval that column value should be in.
+   * @param {Object|Array} params the binding parameters to be populated
+   * @return {String} the generated SQL expression
+   * @throws InvalidParamException if wrong number of operands have been given.
+   */
   buildBetweenCondition(operator, operands, params) {
     if (operands[0] === undefined || operands[1] === undefined || operands[2] == undefined) {
       throw new Error(`Operator '${operator}' requires three operands.`);
@@ -291,6 +490,18 @@ export class QueryBuilder {
     return `${column} ${operator} ${phName1} AND ${phName2}`;
   }
 
+  /**
+   * Creates an SQL expressions with the `IN` operator.
+   * @param {String} operator the operator to use (e.g. `IN` or `NOT IN`)
+   * @param {Array} operands the first operand is the column name. If it is an array
+   * a composite IN condition will be generated.
+   * The second operand is an array of values that column value should be among.
+   * If it is an empty array the generated expression will be a `false` value if
+   * operator is `IN` and empty if operator is `NOT IN`.
+   * @param {Object} params the binding parameters to be populated
+   * @return {String} the generated SQL expression
+   * @throws Error if wrong number of operands have been given.
+   */
   buildInCondition(operator, operands, params) {
     if (operands[0] === undefined || operands[1] === undefined) {
       throw new Error(`Operator '${operator}' requires two operands.`);
@@ -338,6 +549,15 @@ export class QueryBuilder {
     }
   }
 
+  /**
+   * Builds SQL for IN condition
+   *
+   * @param {String} operator
+   * @param {Array} columns
+   * @param {Query} values
+   * @param {Array} params
+   * @return {String} SQL
+   */
   buildSubqueryInCondition(operator, columns, values, params) {
     var {0: sql} = this.build(values, params);
     if (_.isArray(columns)) {
@@ -355,6 +575,15 @@ export class QueryBuilder {
     }
   }
 
+  /**
+   * Builds SQL for IN condition
+   *
+   * @param {String} operator
+   * @param {Array} columns
+   * @param {Query} values
+   * @param {Array} params
+   * @return {String} SQL
+   */
   buildCompositeInCondition(operator, columns, values, params) {
     var vss = [];
     values.forEach((value) => {
@@ -380,71 +609,94 @@ export class QueryBuilder {
     return '(' + columns.join(', ') + `) ${operator} (` + vss.join(', ')  + ')';
   }
 
-  buildOrderByAndLimit(sql, orderBy, limit, offset) {
-    orderBy = this.buildOrderBy(orderBy);
-    if (orderBy !== '') {
-      sql += this._separator + orderBy;
+  /**
+   * Creates an SQL expressions with the `LIKE` operator.
+   * @param {String} operator the operator to use (e.g. `LIKE`, `NOT LIKE`, `OR LIKE` or `OR NOT LIKE`)
+   * @param {Array} operands an array of two or three operands
+   *
+   * - The first operand is the column name.
+   * - The second operand is a single value or an array of values that column value
+   *   should be compared with. If it is an empty array the generated expression will
+   *   be a `false` value if operator is `LIKE` or `OR LIKE`, and empty if operator
+   *   is `NOT LIKE` or `OR NOT LIKE`.
+   * - An optional third operand can also be provided to specify how to escape special characters
+   *   in the value(s). The operand should be an array of mappings from the special characters to their
+   *   escaped counterparts. If this operand is not provided, a default escape mapping will be used.
+   *   You may use `false` or an empty array to indicate the values are already escaped and no escape
+   *   should be applied. Note that when using an escape mapping (or the third operand is not provided),
+   *   the values will be automatically enclosed within a pair of percentage characters.
+   * @param {Object} params the binding parameters to be populated
+   * @return {String} the generated SQL expression
+   * @throws Error if wrong number of operands have been given.
+   */
+  buildLikeCondition(operator, operands, params)
+  {
+    if (operands[0] === undefined || operands[1] === undefined) {
+      throw new Error(`Operator '${operator}' requires two operands.`);
     }
-    limit = this.buildLimit(limit, offset);
-    if (limit !== '') {
-      sql += this._separator + limit;
+
+    var escape = operands[2] !== undefined ? operands[2] : {'%': '\%', '_': '\_', '\\': '\\\\'};
+    delete operands[2];
+
+    var matches = operator.match(/^(AND |OR |)(((NOT |))I?LIKE)/);
+    if (!matches) {
+      throw new Error(`Invalid operator '${operator}'.`);
     }
-    return sql;
-  }
+    var andor = ' ' + (!_.isEmpty(matches[1]) ? matches[1] : 'AND ');
+    var not = !_.isEmpty(matches[3]);
+    operator = matches[2];
 
-  buildUnion(unions, params) {
-    if (_.isEmpty(unions)) {
-      return '';
+    var {0: column, 1: values} = operands;
+
+    if (!_.isArray(values)) {
+      values = [values];
     }
 
-    var result = '';
+    if (_.isEmpty(values)) {
+      return not ? '' : '0=1';
+    }
 
-    unions.forEach((union, i) => {
-      var query = union['query'];
-      if (query instanceof Query) {
-        var data = this.build(query, params);
-        unions[i]['query'] = data[0];
-        params = data[1];
-      }
+    if (column.indexOf('(') === -1) {
+      column = this._db.quoteColumnName(column);
+    }
 
-      result += 'UNION ' + (union['all'] ? 'ALL ' : '') + '( ' + unions[i]['query'] + ' ) ';
+    var parts = [];
+    values.forEach((value) => {
+      var index = _.isArray(params) ? params.length : Object.keys(params).length;
+      var phName = `${QueryBuilder.PARAM_PREFIX}${index}`;
+      params[phName] = _.isEmpty(escape) ? value : ('%' + strtr(value, escape) + '%');
+      parts.push(`${column} ${operator} ${phName}`);
     });
 
-    return trim(result);
+    return parts.join(andor);
   }
 
-  buildOrderBy(columns) {
-    if (_.isEmpty(columns)) {
-      return '';
+  /**
+   * Creates an SQL expressions with the `EXISTS` operator.
+   * @param {String} operator the operator to use (e.g. `EXISTS` or `NOT EXISTS`)
+   * @param {Array} operands contains only one element which is a [[Query]] object representing the sub-query.
+   * @param {Object} params the binding parameters to be populated
+   * @return {String} the generated SQL expression
+   * @throws Error if the operand is not a [[Query]] object.
+   */
+  buildExistsCondition(operator, operands, params)
+  {
+    if (operands[0] instanceof Query) {
+      var {0: sql} = this.build(operands[0], params);
+      return `${operator} (${sql})`;
+    } else {
+      throw new Error('Subquery for EXISTS operator must be a Query object.');
     }
-    var orders = [];
-    Object.keys(columns).forEach((name) => {
-      orders.push(this._db.quoteColumnName(name) + (columns[name] === SORT_DESC ? ' DESC' : ''));
-    });
-
-    return 'ORDER BY ' + orders.join(', ');
   }
 
-  buildLimit(limit, offset) {
-    var sql = '';
-    if (this.hasLimit(limit)) {
-      sql = 'LIMIT ' + limit;
-    }
-    if (this.hasOffset(offset)) {
-      sql += ' OFFSET ' + offset;
-    }
-
-    return _.trimStart(sql);
-  }
-
-  hasLimit(limit) {
-    return /^\d+$/.test(limit);
-  }
-
-  hasOffset(offset) {
-    return /^\d+$/.test(offset) && offset != 0;
-  }
-
+  /**
+   * Creates an SQL expressions like `"column" operator value`.
+   * @param {String} operator the operator to use. Anything could be used e.g. `>`, `<=`, etc.
+   * @param {Array} operands contains two column names.
+   * @param {Array} params the binding parameters to be populated
+   * @return string the generated SQL expression
+   * @throws InvalidParamException if wrong number of operands have been given.
+   */
   buildSimpleCondition(operator, operands, params)
   {
     if (operands.length !== 2) {
