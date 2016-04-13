@@ -13,7 +13,7 @@ var _lodash2 = _interopRequireDefault(_lodash);
 
 var _constants = require('../constants');
 
-var _mysqlConnector = require('./mysql.connector.class');
+var _mysqlConnector = require('./schemas/mysql.connector.class');
 
 function _interopRequireDefault(obj) { return obj && obj.__esModule ? obj : { default: obj }; }
 
@@ -23,6 +23,12 @@ var Query = function () {
   _createClass(Query, null, [{
     key: 'connect',
     value: function connect(details) {
+      switch (details.schemaType) {
+        case 'mysql':
+        default:
+          Query._connector = new _mysqlConnector.MySQLConnector();
+          break;
+      }
       Query._connector.connect(details);
     }
   }, {
@@ -352,6 +358,3 @@ var Query = function () {
 }();
 
 exports.Query = Query;
-
-
-Query._connector = new _mysqlConnector.MySQLConnector();

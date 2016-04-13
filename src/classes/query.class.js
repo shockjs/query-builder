@@ -1,10 +1,16 @@
 import _ from 'lodash';
 import {SORT_ASC, SORT_DESC} from '../constants';
-import {MySQLConnector} from "./mysql.connector.class";
+import {MySQLConnector} from "./schemas/mysql.connector.class";
 
 export class Query {
 
   static connect(details) {
+    switch (details.schemaType) {
+      case 'mysql':
+      default:
+        Query._connector = new MySQLConnector();
+        break;
+    }
     Query._connector.connect(details);
   };
 
@@ -274,5 +280,3 @@ export class Query {
   }
 
 }
-
-Query._connector = new MySQLConnector();
