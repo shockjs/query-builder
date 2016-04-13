@@ -38,6 +38,7 @@ Info: You usually mainly work with Query instead of QueryBuilder. The latter is 
 To open a connection.
 ```javascript
 Query.connect({
+    "schemaType": "mysql",
     "host": "xxxx",
     "user": "xxxx",
     "password": "xxxx",
