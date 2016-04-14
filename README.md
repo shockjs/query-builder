@@ -1,5 +1,9 @@
 #Query Builder
 
+![Build Status](https://travis-ci.org/sequel-builder/sequel-builder.svg)
+[![node](https://img.shields.io/badge/node-v5.5.0-blue.svg)]()
+[![MySQL](https://img.shields.io/badge/MySQL-5.5-blue.svg)]()
+
 This is an attempt to port Query builder from Yii2. MySQL is currently all that is supported at this time.
 
 Query builder allows you to construct a SQL query in a programmatic and DBMS-agnostic way. Compared to writing raw SQL statements, using query builder will help you write more readable SQL-related code and generate more secure SQL statements.
