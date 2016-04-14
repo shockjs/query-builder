@@ -1,6 +1,6 @@
 import mysql from 'mysql';
-import {QueryBuilder} from "./query.builder.class";
-import {Command} from "./command.class";
+import {QueryBuilder} from "../query.builder.class";
+import {Command} from "../command.class";
 import _ from "lodash";
 
 /**

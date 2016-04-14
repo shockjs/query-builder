@@ -11,9 +11,9 @@ var _mysql = require("mysql");
 
 var _mysql2 = _interopRequireDefault(_mysql);
 
-var _queryBuilder = require("./query.builder.class");
+var _queryBuilder = require("../query.builder.class");
 
-var _command = require("./command.class");
+var _command = require("../command.class");
 
 var _lodash = require("lodash");
 
