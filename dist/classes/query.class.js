@@ -15,6 +15,8 @@ var _constants = require('../constants');
 
 var _mysqlConnector = require('./schemas/mysql.connector.class');
 
+var _phpjs = require('phpjs');
+
 function _interopRequireDefault(obj) { return obj && obj.__esModule ? obj : { default: obj }; }
 
 function _classCallCheck(instance, Constructor) { if (!(instance instanceof Constructor)) { throw new TypeError("Cannot call a class as a function"); } }
@@ -256,7 +258,7 @@ var Query = function () {
       if (this._groupBy === null) {
         this._groupBy = columns;
       } else {
-        this._groupBy = _lodash2.default.merge(this._groupBy, columns);
+        this._groupBy = this._mergeValues(this._groupBy, columns);
       }
       return this;
     }
@@ -302,6 +304,17 @@ var Query = function () {
       return this;
     }
   }, {
+    key: 'addOrderBy',
+    value: function addOrderBy(columns) {
+      columns = this.normalizeOrderBy(columns);
+      if (this._orderBy === null) {
+        this._orderBy = columns;
+      } else {
+        this._orderBy = this._mergeValues(this._orderBy, columns);
+      }
+      return this;
+    }
+  }, {
     key: 'normalizeOrderBy',
     value: function normalizeOrderBy(columns) {
       if (_lodash2.default.isObject(columns)) {
@@ -310,11 +323,11 @@ var Query = function () {
         columns = columns.trim().split(/\s*,\s*/).filter(function (value) {
           return value != '';
         });
-        var result = [];
+        var result = {};
         Object.keys(columns).forEach(function (key) {
           var matches = columns[key].match(/^(.*?)\s+(asc|desc)$/i);
           if (matches) {
-            result[matches[1]] = matches[2].localeCompare('desc') ? _constants.SORT_ASC : _constants.SORT_DESC;
+            result[matches[1]] = (0, _phpjs.strcasecmp)(matches[2], 'desc') ? _constants.SORT_ASC : _constants.SORT_DESC;
           } else {
             result[columns[key]] = _constants.SORT_ASC;
           }
@@ -350,6 +363,18 @@ var Query = function () {
           });
         }
       }
+      return this;
+    }
+  }, {
+    key: 'limit',
+    value: function limit(_limit) {
+      this._limit = _limit;
+      return this;
+    }
+  }, {
+    key: 'offset',
+    value: function offset(_offset) {
+      this._offset = _offset;
       return this;
     }
   }]);

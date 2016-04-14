@@ -1,6 +1,7 @@
 import _ from 'lodash';
 import {SORT_ASC, SORT_DESC} from '../constants';
 import {MySQLConnector} from "./schemas/mysql.connector.class";
+import {strcasecmp} from 'phpjs';
 
 export class Query {
 
@@ -198,7 +199,7 @@ export class Query {
     if (this._groupBy === null) {
       this._groupBy = columns;
     } else {
-      this._groupBy = _.merge(this._groupBy, columns);
+      this._groupBy = this._mergeValues(this._groupBy, columns);
     }
     return this;
   }
@@ -235,21 +236,32 @@ export class Query {
     return this;
   }
 
+  addOrderBy(columns)
+  {
+    columns = this.normalizeOrderBy(columns);
+    if (this._orderBy === null) {
+      this._orderBy = columns;
+    } else {
+      this._orderBy = this._mergeValues(this._orderBy, columns);
+    }
+    return this;
+  }
+
   normalizeOrderBy(columns)
   {
     if (_.isObject(columns)) {
       return columns;
     } else {
       columns = columns.trim().split(/\s*,\s*/).filter((value) => { return value != '' });
-      var result = [];
+      var result = {};
       Object.keys(columns).forEach((key) => {
         var matches = columns[key].match(/^(.*?)\s+(asc|desc)$/i);
-      if (matches) {
-        result[matches[1]] = matches[2].localeCompare('desc') ? SORT_ASC : SORT_DESC;
-      } else {
-        result[columns[key]] = SORT_ASC;
-      }
-    });
+        if (matches) {
+          result[matches[1]] = strcasecmp(matches[2], 'desc') ? SORT_ASC : SORT_DESC;
+        } else {
+          result[columns[key]] = SORT_ASC;
+        }
+      });
       return result;
     }
   }
@@ -276,6 +288,18 @@ export class Query {
       });
       }
     }
+    return this;
+  }
+
+  limit(limit)
+  {
+    this._limit = limit;
+    return this;
+  }
+
+  offset(offset)
+  {
+    this._offset = offset;
     return this;
   }
 
