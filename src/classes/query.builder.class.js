@@ -1,7 +1,7 @@
 import _ from 'lodash';
 import {Query} from './query.class';
 import {SORT_DESC} from '../constants';
-import strtr from 'phpjs/strtr';
+import {strtr} from 'phpjs';
 
 export class QueryBuilder {
 

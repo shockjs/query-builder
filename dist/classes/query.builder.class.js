@@ -15,9 +15,7 @@ var _query = require('./query.class');
 
 var _constants = require('../constants');
 
-var _strtr = require('phpjs/strtr');
-
-var _strtr2 = _interopRequireDefault(_strtr);
+var _phpjs = require('phpjs');
 
 function _interopRequireDefault(obj) { return obj && obj.__esModule ? obj : { default: obj }; }
 
@@ -799,7 +797,7 @@ var QueryBuilder = exports.QueryBuilder = function () {
       values.forEach(function (value) {
         var index = _lodash2.default.isArray(params) ? params.length : Object.keys(params).length;
         var phName = '' + QueryBuilder.PARAM_PREFIX + index;
-        params[phName] = _lodash2.default.isEmpty(escape) ? value : '%' + (0, _strtr2.default)(value, escape) + '%';
+        params[phName] = _lodash2.default.isEmpty(escape) ? value : '%' + (0, _phpjs.strtr)(value, escape) + '%';
         parts.push(column + ' ' + operator + ' ' + phName);
       });
 
