@@ -54,8 +54,8 @@ export class Query {
    * @private
    */
   _CSVToArray(value) {
-    if (!_.isArray(value) && !_.isObject(value)) {
-      var temp = value.split(/\s*,\s*/, value.trim());
+    if (_.isString(value)) {
+      var temp = value.trim().split(/\s*,\s*/);
       if (temp.length > 0) {
         value = temp;
       } else {
@@ -77,7 +77,7 @@ export class Query {
 
     //If both are arrays then there is nothing else to do
     if (_.isArray(mergeTo) && _.isArray(mergeFrom)) {
-      return _.merge(mergeTo, mergeFrom);
+      return _.concat(mergeTo, mergeFrom);
     }
 
     //Extract numbered keys into an array and convert back to object so that values get combined.

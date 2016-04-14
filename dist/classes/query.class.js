@@ -91,8 +91,8 @@ var Query = function () {
   }, {
     key: '_CSVToArray',
     value: function _CSVToArray(value) {
-      if (!_lodash2.default.isArray(value) && !_lodash2.default.isObject(value)) {
-        var temp = value.split(/\s*,\s*/, value.trim());
+      if (_lodash2.default.isString(value)) {
+        var temp = value.trim().split(/\s*,\s*/);
         if (temp.length > 0) {
           value = temp;
         } else {
@@ -117,7 +117,7 @@ var Query = function () {
 
       //If both are arrays then there is nothing else to do
       if (_lodash2.default.isArray(mergeTo) && _lodash2.default.isArray(mergeFrom)) {
-        return _lodash2.default.merge(mergeTo, mergeFrom);
+        return _lodash2.default.concat(mergeTo, mergeFrom);
       }
 
       //Extract numbered keys into an array and convert back to object so that values get combined.
