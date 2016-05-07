@@ -10,18 +10,18 @@ export class Query {
     switch (details.schemaType) {
       case 'mysql':
       default:
-        this.constructor._connector = new MySQLConnector();
+        this._connector = new MySQLConnector();
         break;
     }
-    this.constructor._connector.connect(details);
+    this._connector.connect(details);
   };
 
   static end() {
-    this.constructor._connector.end();
+    this._connector.end();
   };
 
   static getDb() {
-    return this.constructor._connector;
+    return this._connector;
   }
 
   constructor() {
@@ -389,3 +389,5 @@ export class Query {
   }
 
 }
+
+Query._connector = null;

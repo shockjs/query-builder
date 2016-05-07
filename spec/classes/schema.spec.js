@@ -1,15 +1,9 @@
 const TableSchema = require("../../dist/classes/table.schema.class").TableSchema;
 var Schema = require("../../dist/classes/schema.class").Schema;
 var Query = require('../../dist/classes/query.class').Query;
+Query.connect(require("../utils/connect"));
 
 describe("Schema", function() {
-  
-  Query.connect({
-    "host": "localhost",
-    "user": "root",
-    "password": "",
-    "database": "testdb"
-  });
   var schema = Query.getDb().getSchema();
 
   it("testing getTableSchema", function(done) {

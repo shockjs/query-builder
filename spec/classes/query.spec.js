@@ -1,8 +1,9 @@
 var SORT_ASC = require("../../dist/constants").SORT_ASC;
 var SORT_DESC = require("../../dist/constants").SORT_DESC;
+var Query = require('../../dist/classes/query.class').Query;
+Query.connect(require("../utils/connect"));
 
 describe("Query", function() {
-  var Query = require('../../dist/classes/query.class').Query;
   var query;
 
   beforeEach(function() {
@@ -95,6 +96,21 @@ describe("Query", function() {
     query.limit(10).offset(5);
     expect(query._limit).toEqual(10);
     expect(query._offset).toEqual(5);
+  });
+
+  it("run a query for all", function(done) {
+    query.select("*")
+      .from("tbl_person")
+      .all()
+      .then((data) => {
+        expect(data).toEqual([]);
+        done();
+      })
+      .catch((err) => {
+        console.error(err);
+        expect(false).toBeTruthy();
+        done();
+      });
   });
 
 });

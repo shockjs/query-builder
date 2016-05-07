@@ -1,14 +1,9 @@
 const Schema = require("../../dist/classes/schema.class").Schema;
 const Query = require('../../dist/classes/query.class').Query;
+Query.connect(require("../utils/connect"));
 
 describe("Query Builder", function() {
 
-  Query.connect({
-    "host": "localhost",
-    "user": "root",
-    "password": "",
-    "database": "testdb"
-  });
   var builder = Query.getDb().getQueryBuilder();
 
   it("generates query for table creation string in mysql", function() {

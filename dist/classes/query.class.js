@@ -27,18 +27,18 @@ class Query {
     switch (details.schemaType) {
       case 'mysql':
       default:
-        this.constructor._connector = new _connector.Connector();
+        this._connector = new _connector.Connector();
         break;
     }
-    this.constructor._connector.connect(details);
+    this._connector.connect(details);
   }
 
   static end() {
-    this.constructor._connector.end();
+    this._connector.end();
   }
 
   static getDb() {
-    return this.constructor._connector;
+    return this._connector;
   }
 
   constructor() {
@@ -386,4 +386,6 @@ class Query {
   }
 
 }
+
 exports.Query = Query;
+Query._connector = null;

@@ -1,7 +1,5 @@
 {
   "plugins": [
-    "transform-es2015-modules-commonjs",
-    "syntax-async-functions",
-    "transform-regenerator"
+    "transform-es2015-modules-commonjs"
   ]
 }
