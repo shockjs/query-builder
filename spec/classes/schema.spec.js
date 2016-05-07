@@ -6,8 +6,8 @@ describe("Schema", function() {
   
   Query.connect({
     "host": "localhost",
-    "user": "shock",
-    "password": "123",
+    "user": "root",
+    "password": "",
     "database": "testdb"
   });
   var schema = Query.getDb().getSchema();
@@ -20,5 +20,5 @@ describe("Schema", function() {
       done();
     });
   });
-  
+
 });

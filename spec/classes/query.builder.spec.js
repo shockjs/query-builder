@@ -5,8 +5,8 @@ describe("Query Builder", function() {
 
   Query.connect({
     "host": "localhost",
-    "user": "shock",
-    "password": "123",
+    "user": "root",
+    "password": "",
     "database": "testdb"
   });
   var builder = Query.getDb().getQueryBuilder();
