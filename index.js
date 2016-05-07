@@ -1,4 +1,4 @@
-const Query = require("./src/classes/query.class").Query;
+const Query = require("./dist/classes/query.class").Query;
 const constants = require("./dist/constants");
 
 module.exports = {
