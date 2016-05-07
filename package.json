@@ -1,6 +1,6 @@
 {
   "name": "sequel-builder",
-  "version": "0.2.0",
+  "version": "0.2.1",
   "description": "Ported query library from php yii2 to nodejs. currently only supporting mysql.",
   "main": "index.js",
   "scripts": {
