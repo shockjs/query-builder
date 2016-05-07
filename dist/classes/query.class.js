@@ -5,44 +5,43 @@ Object.defineProperty(exports, "__esModule", {
 });
 exports.Query = undefined;
 
-var _createClass = function () { function defineProperties(target, props) { for (var i = 0; i < props.length; i++) { var descriptor = props[i]; descriptor.enumerable = descriptor.enumerable || false; descriptor.configurable = true; if ("value" in descriptor) descriptor.writable = true; Object.defineProperty(target, descriptor.key, descriptor); } } return function (Constructor, protoProps, staticProps) { if (protoProps) defineProperties(Constructor.prototype, protoProps); if (staticProps) defineProperties(Constructor, staticProps); return Constructor; }; }();
-
 var _lodash = require('lodash');
 
 var _lodash2 = _interopRequireDefault(_lodash);
 
 var _constants = require('../constants');
 
-var _mysqlConnector = require('./schemas/mysql.connector.class');
+var _connector = require('./schemas/mysql/connector.class');
 
 var _phpjs = require('phpjs');
 
+var _csvToArray = require('../utils/csvToArray');
+
+var _csvToArray2 = _interopRequireDefault(_csvToArray);
+
 function _interopRequireDefault(obj) { return obj && obj.__esModule ? obj : { default: obj }; }
 
-function _classCallCheck(instance, Constructor) { if (!(instance instanceof Constructor)) { throw new TypeError("Cannot call a class as a function"); } }
+class Query {
 
-var Query = function () {
-  _createClass(Query, null, [{
-    key: 'connect',
-    value: function connect(details) {
-      switch (details.schemaType) {
-        case 'mysql':
-        default:
-          Query._connector = new _mysqlConnector.MySQLConnector();
-          break;
-      }
-      Query._connector.connect(details);
+  static connect(details) {
+    switch (details.schemaType) {
+      case 'mysql':
+      default:
+        this.constructor._connector = new _connector.Connector();
+        break;
     }
-  }, {
-    key: 'end',
-    value: function end() {
-      Query._connector.end();
-    }
-  }]);
+    this.constructor._connector.connect(details);
+  }
 
-  function Query() {
-    _classCallCheck(this, Query);
+  static end() {
+    this.constructor._connector.end();
+  }
 
+  static getDb() {
+    return this.constructor._connector;
+  }
+
+  constructor() {
     this._select = null;
     this._selectOption = null;
     this._distinct = null;
@@ -58,328 +57,333 @@ var Query = function () {
     this._params = {};
   }
 
-  _createClass(Query, [{
-    key: 'createCommand',
-    value: function createCommand() {
-      var _Query$_connector$get = Query._connector.getQueryBuilder().build(this);
+  /**
+   * Creates the sql command ready for execution.
+   * @returns {Command}
+   */
+  createCommand() {
+    var { 0: sql, 1: params } = this.constructor._connector.getQueryBuilder().build(this);
+    return this.constructor._connector.createCommand(sql, params);
+  }
 
-      var sql = _Query$_connector$get[0];
-      var params = _Query$_connector$get[1];
+  /**
+   * Fetches all results.
+   * @returns {Promise.<Array>}
+   */
+  all() {
+    return this.createCommand().execute().then(data => data.rows ? data.rows : null);
+  }
 
-      return Query._connector.createCommand(sql, params);
+  /**
+   * Fetches a single result.
+   * @returns {Promise.<Object>}
+   */
+  one() {
+    return this.createCommand().execute().then(data => data.rows ? data.rows.pop() : null);
+  }
+
+  /**
+   * Fetches the first column from each row.
+   * @returns {Promise.<Array>}
+   */
+  column() {
+    return this.createCommand().execute().then(data => _lodash2.default.map(data.rows, row => {
+      return (0, _phpjs.reset)(row);
+    }));
+  }
+
+  /**
+   * Fetches a single value.
+   * @returns {Promise.<String>}
+   */
+  scalar() {
+    return this.createCommand().execute().then(data => (0, _phpjs.reset)(data.rows[0]));
+  }
+
+  /**
+   * Fetches the count of the whole table.
+   *
+   * @param q
+   * @returns {*}
+   */
+  count(q = "*") {
+    return this._queryScalar(`COUNT(${ q })`);
+  }
+
+  /**
+   * Fetches the sum of the specified column.
+   *
+   * @param q
+   * @returns {*}
+   */
+  sum(q) {
+    return this._queryScalar(`SUM(${ q })`);
+  }
+
+  /**
+   * Fetches the average of the specified column.
+   *
+   * @param q
+   * @returns {*}
+   */
+  average(q) {
+    return this._queryScalar(`AVG(${ q })`);
+  }
+
+  /**
+   * Fetches the minimum of the specified column.
+   *
+   * @param q
+   * @returns {*}
+   */
+  min(q) {
+    return this._queryScalar(`MIN(${ q })`);
+  }
+
+  /**
+   * Fetches the maximum of the specified column.
+   *
+   * @param q
+   * @returns {*}
+   */
+  max(q) {
+    return this._queryScalar(`MAX(${ q })`);
+  }
+
+  /**
+   * Queries a scalar value by setting [[select]] first.
+   * Restores the value of select to make this query reusable.
+   * @param {String} expression
+   * @return {Promise.<Boolean|String>}
+   */
+  _queryScalar(expression) {
+    var select = this._select;
+    var limit = this._limit;
+    var offset = this._offset;
+    this._select = [expression];
+    this._limit = null;
+    this._offset = null;
+    var command = this.createCommand();
+    this._select = select;
+    this._offset = offset;
+    this._limit = limit;
+    return command.execute().then(data => (0, _phpjs.reset)(data.rows[0]));
+  }
+
+  /**
+   * Merges like php arrays where numbered keys get merged and string keys overwrite.
+   *
+   * @param mergeTo
+   * @param mergeFrom
+   * @returns {Object}
+   * @private
+   */
+  _mergeValues(mergeTo, mergeFrom) {
+
+    //If both are arrays then there is nothing else to do
+    if (_lodash2.default.isArray(mergeTo) && _lodash2.default.isArray(mergeFrom)) {
+      return _lodash2.default.concat(mergeTo, mergeFrom);
     }
-  }, {
-    key: 'all',
-    value: function all() {
-      return this.createCommand().execute().then(function (data) {
-        return data.rows ? data.rows : null;
-      });
-    }
-  }, {
-    key: 'one',
-    value: function one() {
-      return this.createCommand().execute().then(function (data) {
-        return data.rows ? data.rows.pop() : null;
-      });
-    }
 
-    /**
-     * If value is a CSV String then split into an array
-     * @param value
-     * @returns {*}
-     * @private
-     */
+    //Extract numbered keys into an array and convert back to object so that values get combined.
+    var numbered = _lodash2.default.reduce(_lodash2.default.filter(mergeTo, (v, k) => !isNaN(k)).concat(_lodash2.default.filter(mergeFrom, (v, k) => !isNaN(k))), (o, v, i) => {
+      o[i] = v;
+      return o;
+    }, {});
 
-  }, {
-    key: '_CSVToArray',
-    value: function _CSVToArray(value) {
-      if (_lodash2.default.isString(value)) {
-        var temp = value.trim().split(/\s*,\s*/);
-        if (temp.length > 0) {
-          value = temp;
-        } else {
-          value = [value];
-        }
-      }
-      return value;
-    }
+    // Extract aliased values from arrays
+    var keyed = _lodash2.default.extend(_lodash2.default.omitBy(mergeTo, (v, k) => {
+      return !isNaN(k);
+    }), _lodash2.default.omitBy(mergeFrom, (v, k) => {
+      return !isNaN(k);
+    }));
 
-    /**
-     * Merges like php arrays where numbered keys get merged and string keys overwrite.
-     *
-     * @param mergeTo
-     * @param mergeFrom
-     * @returns {Object}
-     * @private
-     */
+    return _lodash2.default.extend(keyed, numbered);
+  }
 
-  }, {
-    key: '_mergeValues',
-    value: function _mergeValues(mergeTo, mergeFrom) {
+  select(columns, option = null) {
+    columns = (0, _csvToArray2.default)(columns);
+    this._select = columns;
+    this._selectOption = option;
+    return this;
+  }
 
-      //If both are arrays then there is nothing else to do
-      if (_lodash2.default.isArray(mergeTo) && _lodash2.default.isArray(mergeFrom)) {
-        return _lodash2.default.concat(mergeTo, mergeFrom);
-      }
-
-      //Extract numbered keys into an array and convert back to object so that values get combined.
-      var numbered = _lodash2.default.reduce(_lodash2.default.filter(mergeTo, function (v, k) {
-        return !isNaN(k);
-      }).concat(_lodash2.default.filter(mergeFrom, function (v, k) {
-        return !isNaN(k);
-      })), function (o, v, i) {
-        o[i] = v;
-        return o;
-      }, {});
-
-      // Extract aliased values from arrays
-      var keyed = _lodash2.default.extend(_lodash2.default.omitBy(mergeTo, function (v, k) {
-        return !isNaN(k);
-      }), _lodash2.default.omitBy(mergeFrom, function (v, k) {
-        return !isNaN(k);
-      }));
-
-      return _lodash2.default.extend(keyed, numbered);
-    }
-  }, {
-    key: 'select',
-    value: function select(columns) {
-      var option = arguments.length <= 1 || arguments[1] === undefined ? null : arguments[1];
-
-      columns = this._CSVToArray(columns);
+  addSelect(columns) {
+    columns = (0, _csvToArray2.default)(columns);
+    if (this._select === null) {
       this._select = columns;
-      this._selectOption = option;
-      return this;
+    } else {
+      this._select = this._mergeValues(this._select, columns);
     }
-  }, {
-    key: 'addSelect',
-    value: function addSelect(columns) {
-      columns = this._CSVToArray(columns);
-      if (this._select === null) {
-        this._select = columns;
-      } else {
-        this._select = this._mergeValues(this._select, columns);
-      }
-      return this;
-    }
-  }, {
-    key: 'distinct',
-    value: function distinct() {
-      var value = arguments.length <= 0 || arguments[0] === undefined ? true : arguments[0];
+    return this;
+  }
 
-      this._distinct = value;
-      return this;
-    }
-  }, {
-    key: 'from',
-    value: function from(tables) {
-      tables = this._CSVToArray(tables);
-      this._from = tables;
-      return this;
-    }
-  }, {
-    key: 'where',
-    value: function where(condition, params) {
+  distinct(value = true) {
+    this._distinct = value;
+    return this;
+  }
+
+  from(tables) {
+    tables = (0, _csvToArray2.default)(tables);
+    this._from = tables;
+    return this;
+  }
+
+  where(condition, params) {
+    this._where = condition;
+    this.addParams(params);
+    return this;
+  }
+
+  andWhere(condition, params) {
+    if (this._where === null) {
       this._where = condition;
-      this.addParams(params);
-      return this;
+    } else {
+      this._where = ['and', this._where, condition];
     }
-  }, {
-    key: 'andWhere',
-    value: function andWhere(condition, params) {
-      if (this._where === null) {
-        this._where = condition;
-      } else {
-        this._where = ['and', this._where, condition];
-      }
-      this.addParams(params);
-      return this;
-    }
-  }, {
-    key: 'orWhere',
-    value: function orWhere(condition) {
-      var params = arguments.length <= 1 || arguments[1] === undefined ? [] : arguments[1];
+    this.addParams(params);
+    return this;
+  }
 
-      if (this._where === null) {
-        this._where = condition;
-      } else {
-        this._where = ['or', this._where, condition];
-      }
-      this.addParams(params);
-      return this;
+  orWhere(condition, params = []) {
+    if (this._where === null) {
+      this._where = condition;
+    } else {
+      this._where = ['or', this._where, condition];
     }
-  }, {
-    key: 'join',
-    value: function join(type, table) {
-      var on = arguments.length <= 2 || arguments[2] === undefined ? '' : arguments[2];
-      var params = arguments.length <= 3 || arguments[3] === undefined ? [] : arguments[3];
+    this.addParams(params);
+    return this;
+  }
 
-      this._join.push([type, table, on]);
-      return this.addParams(params);
-    }
-  }, {
-    key: 'innerJoin',
-    value: function innerJoin(table) {
-      var on = arguments.length <= 1 || arguments[1] === undefined ? '' : arguments[1];
-      var params = arguments.length <= 2 || arguments[2] === undefined ? [] : arguments[2];
+  join(type, table, on = '', params = []) {
+    this._join.push([type, table, on]);
+    return this.addParams(params);
+  }
 
-      this._join.push(['INNER JOIN', table, on]);
-      return this.addParams(params);
-    }
-  }, {
-    key: 'leftJoin',
-    value: function leftJoin(table) {
-      var on = arguments.length <= 1 || arguments[1] === undefined ? '' : arguments[1];
-      var params = arguments.length <= 2 || arguments[2] === undefined ? [] : arguments[2];
+  innerJoin(table, on = '', params = []) {
+    this._join.push(['INNER JOIN', table, on]);
+    return this.addParams(params);
+  }
 
-      this._join.push(['LEFT JOIN', table, on]);
-      return this.addParams(params);
-    }
-  }, {
-    key: 'rightJoin',
-    value: function rightJoin(table) {
-      var on = arguments.length <= 1 || arguments[1] === undefined ? '' : arguments[1];
-      var params = arguments.length <= 2 || arguments[2] === undefined ? [] : arguments[2];
+  leftJoin(table, on = '', params = []) {
+    this._join.push(['LEFT JOIN', table, on]);
+    return this.addParams(params);
+  }
 
-      this._join.push(['RIGHT JOIN', table, on]);
-      return this.addParams(params);
-    }
-  }, {
-    key: 'groupBy',
-    value: function groupBy(columns) {
-      columns = this._CSVToArray(columns);
+  rightJoin(table, on = '', params = []) {
+    this._join.push(['RIGHT JOIN', table, on]);
+    return this.addParams(params);
+  }
+
+  groupBy(columns) {
+    columns = (0, _csvToArray2.default)(columns);
+    this._groupBy = columns;
+    return this;
+  }
+
+  addGroupBy(columns) {
+    columns = (0, _csvToArray2.default)(columns);
+    if (this._groupBy === null) {
       this._groupBy = columns;
-      return this;
+    } else {
+      this._groupBy = this._mergeValues(this._groupBy, columns);
     }
-  }, {
-    key: 'addGroupBy',
-    value: function addGroupBy(columns) {
-      columns = this._CSVToArray(columns);
-      if (this._groupBy === null) {
-        this._groupBy = columns;
-      } else {
-        this._groupBy = this._mergeValues(this._groupBy, columns);
-      }
-      return this;
-    }
-  }, {
-    key: 'having',
-    value: function having(condition) {
-      var params = arguments.length <= 1 || arguments[1] === undefined ? [] : arguments[1];
+    return this;
+  }
 
+  having(condition, params = []) {
+    this._having = condition;
+    this.addParams(params);
+    return this;
+  }
+
+  andHaving(condition, params = []) {
+    if (this._having === null) {
       this._having = condition;
-      this.addParams(params);
-      return this;
+    } else {
+      this._having = ['and', this._having, condition];
     }
-  }, {
-    key: 'andHaving',
-    value: function andHaving(condition) {
-      var params = arguments.length <= 1 || arguments[1] === undefined ? [] : arguments[1];
+    this.addParams(params);
+    return this;
+  }
 
-      if (this._having === null) {
-        this._having = condition;
-      } else {
-        this._having = ['and', this._having, condition];
-      }
-      this.addParams(params);
-      return this;
+  orHaving(condition, params = []) {
+    if (this._having === null) {
+      this._having = condition;
+    } else {
+      this._having = ['or', this._having, condition];
     }
-  }, {
-    key: 'orHaving',
-    value: function orHaving(condition) {
-      var params = arguments.length <= 1 || arguments[1] === undefined ? [] : arguments[1];
+    this.addParams(params);
+    return this;
+  }
 
-      if (this._having === null) {
-        this._having = condition;
-      } else {
-        this._having = ['or', this._having, condition];
-      }
-      this.addParams(params);
-      return this;
-    }
-  }, {
-    key: 'orderBy',
-    value: function orderBy(columns) {
-      this._orderBy = this.normalizeOrderBy(columns);
-      return this;
-    }
-  }, {
-    key: 'addOrderBy',
-    value: function addOrderBy(columns) {
-      columns = this.normalizeOrderBy(columns);
-      if (this._orderBy === null) {
-        this._orderBy = columns;
-      } else {
-        this._orderBy = this._mergeValues(this._orderBy, columns);
-      }
-      return this;
-    }
-  }, {
-    key: 'normalizeOrderBy',
-    value: function normalizeOrderBy(columns) {
-      if (_lodash2.default.isObject(columns)) {
-        return columns;
-      } else {
-        columns = columns.trim().split(/\s*,\s*/).filter(function (value) {
-          return value != '';
-        });
-        var result = {};
-        Object.keys(columns).forEach(function (key) {
-          var matches = columns[key].match(/^(.*?)\s+(asc|desc)$/i);
-          if (matches) {
-            result[matches[1]] = (0, _phpjs.strcasecmp)(matches[2], 'desc') ? _constants.SORT_ASC : _constants.SORT_DESC;
-          } else {
-            result[columns[key]] = _constants.SORT_ASC;
-          }
-        });
-        return result;
-      }
-    }
-  }, {
-    key: 'union',
-    value: function union(sql) {
-      var all = arguments.length <= 1 || arguments[1] === undefined ? false : arguments[1];
+  orderBy(columns) {
+    this._orderBy = this.normalizeOrderBy(columns);
+    return this;
+  }
 
-      this._union.push({ query: sql, all: all });
-      return this;
+  addOrderBy(columns) {
+    columns = this.normalizeOrderBy(columns);
+    if (this._orderBy === null) {
+      this._orderBy = columns;
+    } else {
+      this._orderBy = this._mergeValues(this._orderBy, columns);
     }
-  }, {
-    key: 'params',
-    value: function params(_params) {
-      this.params = _params;
-      return this;
-    }
-  }, {
-    key: 'addParams',
-    value: function addParams(params) {
-      var _this = this;
+    return this;
+  }
 
-      if (!_lodash2.default.isEmpty(params)) {
-        if (_lodash2.default.isEmpty(this._params)) {
-          this._params = params;
+  normalizeOrderBy(columns) {
+    if (_lodash2.default.isObject(columns)) {
+      return columns;
+    } else {
+      columns = columns.trim().split(/\s*,\s*/).filter(value => {
+        return value != '';
+      });
+      var result = {};
+      Object.keys(columns).forEach(key => {
+        var matches = columns[key].match(/^(.*?)\s+(asc|desc)$/i);
+        if (matches) {
+          result[matches[1]] = (0, _phpjs.strcasecmp)(matches[2], 'desc') ? _constants.SORT_ASC : _constants.SORT_DESC;
         } else {
-          Object.keys(params).forEach(function (name) {
-            _this._params[name] = params[name];
-          });
+          result[columns[key]] = _constants.SORT_ASC;
         }
+      });
+      return result;
+    }
+  }
+
+  union(sql, all = false) {
+    this._union.push({ query: sql, all: all });
+    return this;
+  }
+
+  params(params) {
+    this.params = params;
+    return this;
+  }
+
+  addParams(params) {
+    if (!_lodash2.default.isEmpty(params)) {
+      if (_lodash2.default.isEmpty(this._params)) {
+        this._params = params;
+      } else {
+        Object.keys(params).forEach(name => {
+          this._params[name] = params[name];
+        });
       }
-      return this;
     }
-  }, {
-    key: 'limit',
-    value: function limit(_limit) {
-      this._limit = _limit;
-      return this;
-    }
-  }, {
-    key: 'offset',
-    value: function offset(_offset) {
-      this._offset = _offset;
-      return this;
-    }
-  }]);
+    return this;
+  }
 
-  return Query;
-}();
+  limit(limit) {
+    this._limit = limit;
+    return this;
+  }
 
+  offset(offset) {
+    this._offset = offset;
+    return this;
+  }
+
+}
 exports.Query = Query;

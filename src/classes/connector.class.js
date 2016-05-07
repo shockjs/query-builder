@@ -1,30 +1,14 @@
-import mysql from 'mysql';
-import {QueryBuilder} from "../query.builder.class";
-import {Command} from "../command.class";
+import {QueryBuilder} from "./query.builder.class";
 import _ from "lodash";
+import {Command} from "./command.class";
 
-/**
- * Simple mysql connector class.
- */
-export class MySQLConnector {
+export class Connector {
 
-  connect(config) {
-    this._connection = mysql.createConnection(config);
-    this._connection.connect();
-    this._connection.config.queryFormat = function(query, values) {
-      if (!values) return query;
-      return query.replace(/(\:\w+)/g, function (txt, key) {
-        if (values.hasOwnProperty(key)) {
-          return this.escape(values[key]);
-        }
-        return txt;
-      }.bind(this));
-    };
-    this._builder = null;
-  }
-
-  getQueryBuilder()
-  {
+  /**
+   * Fetches or creates a new QueryBuilder.
+   * @returns {QueryBuilder}
+   */
+  getQueryBuilder() {
     if (this._builder === null) {
       this._builder = this._createQueryBuilder();
     }
@@ -32,8 +16,12 @@ export class MySQLConnector {
     return this._builder;
   }
 
-  _createQueryBuilder()
-  {
+  /**
+   * Creates a QueryBuilder instance.
+   * @returns {QueryBuilder}
+   * @private
+   */
+  _createQueryBuilder() {
     return new QueryBuilder(this);
   }
 
@@ -43,10 +31,6 @@ export class MySQLConnector {
       sql: sql,
       params: params
     });
-  }
-
-  end() {
-    this._connection.end();
   }
 
   quoteColumnName(name) {
@@ -87,10 +71,11 @@ export class MySQLConnector {
   }
 
   quoteSimpleColumnName(name) {
-    return name.indexOf('`') !== -1 || name === '*' ? name : '`' + name + '`';
+    throw new Error(`quoteSimpleColumnName must be implemented in ${this.name}`);
   }
 
   quoteSimpleTableName(name) {
-    return name.indexOf("`") !== -1 ? name : "`" + name + "`";
+    throw new Error(`quoteSimpleColumnName must be implemented in ${this.name}`);
   }
+
 }

@@ -1,7 +1,8 @@
 import _ from 'lodash';
 import {SORT_ASC, SORT_DESC} from '../constants';
-import {MySQLConnector} from "./schemas/mysql.connector.class";
-import {strcasecmp} from 'phpjs';
+import {Connector as MySQLConnector} from "./schemas/mysql/connector.class";
+import {strcasecmp, reset} from 'phpjs';
+import csvToArray from "../utils/csvToArray";
 
 export class Query {
 
@@ -9,15 +10,19 @@ export class Query {
     switch (details.schemaType) {
       case 'mysql':
       default:
-        Query._connector = new MySQLConnector();
+        this.constructor._connector = new MySQLConnector();
         break;
     }
-    Query._connector.connect(details);
+    this.constructor._connector.connect(details);
   };
 
   static end() {
-    Query._connector.end();
+    this.constructor._connector.end();
   };
+
+  static getDb() {
+    return this.constructor._connector;
+  }
 
   constructor() {
     this._select = null;
@@ -35,35 +40,115 @@ export class Query {
     this._params = {};
   }
 
+  /**
+   * Creates the sql command ready for execution.
+   * @returns {Command}
+   */
   createCommand() {
-    var {0: sql, 1:params} = Query._connector.getQueryBuilder().build(this);
-    return Query._connector.createCommand(sql, params);
+    var {0: sql, 1:params} = this.constructor._connector.getQueryBuilder().build(this);
+    return this.constructor._connector.createCommand(sql, params);
   }
 
+  /**
+   * Fetches all results.
+   * @returns {Promise.<Array>}
+   */
   all() {
     return this.createCommand().execute().then((data) => data.rows ? data.rows : null);
   }
 
+  /**
+   * Fetches a single result.
+   * @returns {Promise.<Object>}
+   */
   one() {
     return this.createCommand().execute().then((data) => data.rows ? data.rows.pop() : null);
   }
 
   /**
-   * If value is a CSV String then split into an array
-   * @param value
-   * @returns {*}
-   * @private
+   * Fetches the first column from each row.
+   * @returns {Promise.<Array>}
    */
-  _CSVToArray(value) {
-    if (_.isString(value)) {
-      var temp = value.trim().split(/\s*,\s*/);
-      if (temp.length > 0) {
-        value = temp;
-      } else {
-        value = [value];
-      }
-    }
-    return value;
+  column() {
+    return this.createCommand().execute().then((data) => _.map(data.rows, (row) => { return reset(row) }));
+  }
+
+  /**
+   * Fetches a single value.
+   * @returns {Promise.<String>}
+   */
+  scalar() {
+    return this.createCommand().execute().then((data) => reset(data.rows[0]));
+  }
+
+  /**
+   * Fetches the count of the whole table.
+   *
+   * @param q
+   * @returns {*}
+   */
+  count(q = "*") {
+    return this._queryScalar(`COUNT(${q})`);
+  }
+
+  /**
+   * Fetches the sum of the specified column.
+   *
+   * @param q
+   * @returns {*}
+   */
+  sum(q) {
+    return this._queryScalar(`SUM(${q})`);
+  }
+
+  /**
+   * Fetches the average of the specified column.
+   *
+   * @param q
+   * @returns {*}
+   */
+  average(q) {
+    return this._queryScalar(`AVG(${q})`);
+  }
+
+  /**
+   * Fetches the minimum of the specified column.
+   *
+   * @param q
+   * @returns {*}
+   */
+  min(q) {
+    return this._queryScalar(`MIN(${q})`);
+  }
+
+  /**
+   * Fetches the maximum of the specified column.
+   *
+   * @param q
+   * @returns {*}
+   */
+  max(q) {
+    return this._queryScalar(`MAX(${q})`);
+  }
+
+  /**
+   * Queries a scalar value by setting [[select]] first.
+   * Restores the value of select to make this query reusable.
+   * @param {String} expression
+   * @return {Promise.<Boolean|String>}
+   */
+  _queryScalar(expression) {
+    var select = this._select;
+    var limit = this._limit;
+    var offset = this._offset;
+    this._select =[expression];
+    this._limit = null;
+    this._offset = null;
+    var command = this.createCommand();
+    this._select = select;
+    this._offset = offset;
+    this._limit = limit;
+    return command.execute().then((data) => reset(data.rows[0]));
   }
 
   /**
@@ -114,14 +199,14 @@ export class Query {
   }
 
   select(columns, option = null) {
-    columns = this._CSVToArray(columns);
+    columns = csvToArray(columns);
     this._select = columns;
     this._selectOption = option;
     return this;
   }
 
   addSelect(columns) {
-    columns = this._CSVToArray(columns);
+    columns = csvToArray(columns);
     if (this._select === null) {
       this._select = columns;
     } else {
@@ -136,7 +221,7 @@ export class Query {
   }
 
   from(tables) {
-    tables = this._CSVToArray(tables);
+    tables = csvToArray(tables);
     this._from = tables;
     return this;
   }
@@ -189,13 +274,13 @@ export class Query {
   }
 
   groupBy(columns) {
-    columns = this._CSVToArray(columns);
+    columns = csvToArray(columns);
     this._groupBy = columns;
     return this;
   }
 
   addGroupBy(columns) {
-    columns = this._CSVToArray(columns);
+    columns = csvToArray(columns);
     if (this._groupBy === null) {
       this._groupBy = columns;
     } else {

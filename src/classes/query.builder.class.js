@@ -2,10 +2,11 @@ import _ from 'lodash';
 import {Query} from './query.class';
 import {SORT_DESC} from '../constants';
 import {strtr} from 'phpjs';
+import csvToArray from "../utils/csvToArray";
 
 export class QueryBuilder {
 
-  static PARAM_PREFIX = ':qp';
+  static get PARAM_PREFIX() {':qp'};
 
   constructor(db) {
 
@@ -50,8 +51,6 @@ export class QueryBuilder {
    */
   build(query, params={}) {
 
-    console.log(query);
-
     params = params ? query._params : _.extend(params, query._params);
 
     var clauses = [
@@ -72,6 +71,300 @@ export class QueryBuilder {
     }
 
     return [sql, params];
+  }
+
+  /**
+   * Builds a SQL statement for creating a new DB table.
+   *
+   * The columns in the new  table should be specified as name-definition pairs (e.g. 'name' => 'string'),
+   * where name stands for a column name which will be properly quoted by the method, and definition
+   * stands for the column type which can contain an abstract DB type.
+   * The [[getColumnType()]] method will be invoked to convert any abstract type into a physical one.
+   *
+   * If a column is specified with definition only (e.g. 'PRIMARY KEY (name, type)'), it will be directly
+   * inserted into the generated SQL.
+   *
+   * For example,
+   *
+   * ~~~
+   * sql = queryBuilder.createTable('user', {
+   *  'id': 'pk',
+   *  'name': 'string',
+   *  'age': 'integer',
+   * });
+   * ~~~
+   *
+   * @param {String} table the name of the table to be created. The name will be properly quoted by the method.
+   * @param {Object} columns the columns (name => definition) in the new table.
+   * @param {String} options additional SQL fragment that will be appended to the generated SQL.
+   * @return {String} the SQL statement for creating a new DB table.
+   */
+  createTable(table, columns, options = null) {
+    var cols = [];
+    Object.keys(columns).forEach((name) => {
+      var type = columns[name];
+      if (isNaN(name)) {
+        cols.push("\t" + this._db.quoteColumnName(name) + ' ' + this.getColumnType(type));
+      } else {
+        cols.push("\t" + type);
+      }
+    });
+    var sql = "CREATE TABLE " + this._db.quoteTableName(table) + " (\n" + cols.join(",\n") + "\n)";
+
+    return options === null ? sql : sql + ' ' + options;
+  }
+
+  /**
+   * Builds a SQL statement for renaming a DB table.
+   * @param {String} oldName the table to be renamed. The name will be properly quoted by the method.
+   * @param {String} newName the new table name. The name will be properly quoted by the method.
+   * @return {String} the SQL statement for renaming a DB table.
+   */
+  renameTable(oldName, newName) {
+    return 'RENAME TABLE ' + this._db.quoteTableName(oldName) + ' TO ' + this._db.quoteTableName(newName);
+  }
+
+  /**
+   * Builds a SQL statement for dropping a DB table.
+   * @param {String} table the table to be dropped. The name will be properly quoted by the method.
+   * @return {String} the SQL statement for dropping a DB table.
+   */
+   dropTable(table) {
+    return "DROP TABLE " + this._db.quoteTableName(table);
+  }
+
+  /**
+   * Builds a SQL statement for adding a primary key constraint to an existing table.
+   * @param {String} name the name of the primary key constraint.
+   * @param {String} table the table that the primary key constraint will be added to.
+   * @param {String|Array} columns comma separated string or array of columns that the primary key will consist of.
+   * @return {String} the SQL statement for adding a primary key constraint to an existing table.
+   */
+  addPrimaryKey(name, table, columns) {
+
+    columns = csvToArray(columns);
+
+    columns.forEach((col, i) => {
+      columns[i] = this._db.quoteColumnName(col);
+    });
+
+    return 'ALTER TABLE ' + this._db.quoteTableName(table) + ' ADD CONSTRAINT '
+    + this._db.quoteColumnName(name) + '  PRIMARY KEY ('
+    + columns.join(', ') + ' )';
+  }
+
+  /**
+   * Builds a SQL statement for removing a primary key constraint to an existing table.
+   * @param {String} name the name of the primary key constraint to be removed.
+   * @param {String} table the table that the primary key constraint will be removed from.
+   * @return {String} the SQL statement for removing a primary key constraint from an existing table.
+   */
+  dropPrimaryKey(name, table) {
+    return 'ALTER TABLE ' + this._db.quoteTableName(table)
+      + ' DROP CONSTRAINT ' + this._db.quoteColumnName(name);
+  }
+
+  /**
+   * Builds a SQL statement for truncating a DB table.
+   * @param {String} table the table to be truncated. The name will be properly quoted by the method.
+   * @return {String} the SQL statement for truncating a DB table.
+   */
+  truncateTable(table) {
+    return "TRUNCATE TABLE " + this._db.quoteTableName(table);
+  }
+
+  /**
+   * Builds a SQL statement for adding a new DB column.
+   * @param {String} table the table that the new column will be added to. The table name will be properly quoted by the method.
+   * @param {String} column the name of the new column. The name will be properly quoted by the method.
+   * @param {String} type the column type. The [[getColumnType()]] method will be invoked to convert abstract column type (if any)
+   * into the physical one. Anything that is not recognized as abstract type will be kept in the generated SQL.
+   * For example, 'string' will be turned into 'varchar(255)', while 'string not null' will become 'varchar(255) not null'.
+   * @return string the SQL statement for adding a new column.
+   */
+  addColumn(table, column, type) {
+    return 'ALTER TABLE ' + this._db.quoteTableName(table)
+      + ' ADD ' + this._db.quoteColumnName(column) + ' '
+      + this.getColumnType(type);
+  }
+
+  /**
+   * Builds a SQL statement for dropping a DB column.
+   * @param {String} table the table whose column is to be dropped. The name will be properly quoted by the method.
+   * @param {string} column the name of the column to be dropped. The name will be properly quoted by the method.
+   * @return {String} the SQL statement for dropping a DB column.
+   */
+  dropColumn(table, column) {
+    return "ALTER TABLE " + this._db.quoteTableName(table)
+    + " DROP COLUMN " + this._db.quoteColumnName(column);
+  }
+
+  /**
+   * Builds a SQL statement for renaming a column.
+   * @param {String} table the table whose column is to be renamed. The name will be properly quoted by the method.
+   * @param {String} oldName the old name of the column. The name will be properly quoted by the method.
+   * @param {String} newName the new name of the column. The name will be properly quoted by the method.
+   * @param {String} type the type for the column, used for database that require redeclaration of type.
+   * @return {String} the SQL statement for renaming a DB column.
+   */
+  renameColumn(table, oldName, newName, type=null) {
+    return "ALTER TABLE " + this._db.quoteTableName(table)
+    + " RENAME COLUMN " + this._db.quoteColumnName(oldName)
+    + " TO " + this._db.quoteColumnName(newName);
+  }
+
+  /**
+   * Builds a SQL statement for changing the definition of a column.
+   * @param {String} table the table whose column is to be changed. The table name will be properly quoted by the method.
+   * @param {String} column the name of the column to be changed. The name will be properly quoted by the method.
+   * @param {String} type the new column type. The [[getColumnType()]] method will be invoked to convert abstract
+   * column type (if any) into the physical one. Anything that is not recognized as abstract type will be kept
+   * in the generated SQL. For example, 'string' will be turned into 'varchar(255)', while 'string not null'
+   * will become 'varchar(255) not null'.
+   * @return {String} the SQL statement for changing the definition of a column.
+   */
+  alterColumn(table, column, type) {
+    return 'ALTER TABLE ' + this._db.quoteTableName(table) + ' CHANGE '
+    + this._db.quoteColumnName(column) + ' '
+    + this._db.quoteColumnName(column) + ' '
+    + this.getColumnType(type);
+  }
+
+  /**
+   * Builds a SQL statement for adding a foreign key constraint to an existing table.
+   * The method will properly quote the table and column names.
+   * @param {String} name the name of the foreign key constraint.
+   * @param {String} table the table that the foreign key constraint will be added to.
+   * @param {String|Array} columns the name of the column to that the constraint will be added on.
+   * If there are multiple columns, separate them with commas or use an array to represent them.
+   * @param {String} refTable the table that the foreign key references to.
+   * @param {String|Array} refColumns the name of the column that the foreign key references to.
+   * If there are multiple columns, separate them with commas or use an array to represent them.
+   * @param {String} remove the ON DELETE option. Most DBMS support these options: RESTRICT, CASCADE, NO ACTION, SET DEFAULT, SET NULL
+   * @param {String} update the ON UPDATE option. Most DBMS support these options: RESTRICT, CASCADE, NO ACTION, SET DEFAULT, SET NULL
+   * @return {String} the SQL statement for adding a foreign key constraint to an existing table.
+   */
+  addForeignKey(name, table, columns, refTable, refColumns, remove = null, update = null) {
+    var sql = 'ALTER TABLE ' + this._db.quoteTableName(table)
+      + ' ADD CONSTRAINT ' + this._db.quoteColumnName(name)
+      + ' FOREIGN KEY (' + this.buildColumns(columns) + ')'
+      + ' REFERENCES ' + this._db.quoteTableName(refTable)
+      + ' (' + this.buildColumns(refColumns) + ')';
+    if (remove !== null) {
+      sql += ' ON DELETE ' + remove;
+    }
+    if (update !== null) {
+      sql += ' ON UPDATE ' + update;
+    }
+
+    return sql;
+  }
+
+  /**
+   * Builds a SQL statement for dropping a foreign key constraint.
+   * @param {String} name the name of the foreign key constraint to be dropped. The name will be properly quoted by the method.
+   * @param {String} table the table whose foreign is to be dropped. The name will be properly quoted by the method.
+   * @return {String} the SQL statement for dropping a foreign key constraint.
+   */
+  dropForeignKey(name, table) {
+    return 'ALTER TABLE ' + this._db.quoteTableName(table)
+      + ' DROP CONSTRAINT ' + this._db.quoteColumnName(name);
+  }
+
+  /**
+   * Builds a SQL statement for creating a new index.
+   * @param {String} name the name of the index. The name will be properly quoted by the method.
+   * @param {String} table the table that the new index will be created for. The table name will be properly quoted by the method.
+   * @param {String|Array} columns the column(s) that should be included in the index. If there are multiple columns,
+   * separate them with commas or use an array to represent them. Each column name will be properly quoted
+   * by the method, unless a parenthesis is found in the name.
+   * @param {Boolean} unique whether to add UNIQUE constraint on the created index.
+   * @return {String} the SQL statement for creating a new index.
+   */
+  createIndex(name, table, columns, unique = false) {
+    return (unique ? 'CREATE UNIQUE INDEX ' : 'CREATE INDEX ')
+      + this._db.quoteTableName(name) + ' ON '
+      + this._db.quoteTableName(table)
+      + ' (' + this.buildColumns(columns) + ')';
+  }
+
+  /**
+   * Builds a SQL statement for dropping an index.
+   * @param {String} name the name of the index to be dropped. The name will be properly quoted by the method.
+   * @param {String} table the table whose index is to be dropped. The name will be properly quoted by the method.
+   * @return {String} the SQL statement for dropping an index.
+   */
+  dropIndex(name, table) {
+    return 'DROP INDEX ' + this._db.quoteTableName(name) + ' ON ' + this._db.quoteTableName(table);
+  }
+
+  /**
+   * Creates a SQL statement for resetting the sequence value of a table's primary key.
+   * The sequence will be reset such that the primary key of the next new row inserted
+   * will have the specified value or 1.
+   * @param {String} table the name of the table whose primary key sequence will be reset
+   * @param {Array|String} value the value for the primary key of the next new row inserted. If this is not set,
+   * the next new row's primary key will have a value 1.
+   * @return {String} the SQL statement for resetting sequence
+   * @throws Error if this is not supported by the underlying DBMS
+   */
+  resetSequence(table, value = null) {
+    throw new Error(this._db.getDriverName() + ' does not support resetting sequence.');
+  }
+
+  /**
+   * Converts an abstract column type into a physical column type.
+   * The conversion is done using the type map specified in [[typeMap]].
+   * The following abstract column types are supported (using MySQL as an example to explain the corresponding
+   * physical types):
+   *
+   * - `pk`: an auto-incremental primary key type, will be converted into "int(11) NOT NULL AUTO_INCREMENT PRIMARY KEY"
+   * - `bigpk`: an auto-incremental primary key type, will be converted into "bigint(20) NOT NULL AUTO_INCREMENT PRIMARY KEY"
+   * - `string`: string type, will be converted into "varchar(255)"
+   * - `text`: a long string type, will be converted into "text"
+   * - `smallint`: a small integer type, will be converted into "smallint(6)"
+   * - `integer`: integer type, will be converted into "int(11)"
+   * - `bigint`: a big integer type, will be converted into "bigint(20)"
+   * - `boolean`: boolean type, will be converted into "tinyint(1)"
+   * - `float``: float number type, will be converted into "float"
+   * - `decimal`: decimal number type, will be converted into "decimal"
+   * - `datetime`: datetime type, will be converted into "datetime"
+   * - `timestamp`: timestamp type, will be converted into "timestamp"
+   * - `time`: time type, will be converted into "time"
+   * - `date`: date type, will be converted into "date"
+   * - `money`: money type, will be converted into "decimal(19,4)"
+   * - `binary`: binary data type, will be converted into "blob"
+   *
+   * If the abstract type contains two or more parts separated by spaces (e.g. "string NOT NULL"), then only
+   * the first part will be converted, and the rest of the parts will be appended to the converted result.
+   * For example, 'string NOT NULL' is converted to 'varchar(255) NOT NULL'.
+   *
+   * For some of the abstract types you can also specify a length or precision constraint
+   * by appending it in round brackets directly to the type.
+   * For example `string(32)` will be converted into "varchar(32)" on a MySQL database.
+   * If the underlying DBMS does not support these kind of constraints for a type it will
+   * be ignored.
+   *
+   * If a type cannot be found in [[typeMap]], it will be returned without any change.
+   * @param {String} type abstract column type
+   * @return {String} physical column type.
+   */
+  getColumnType(type) {
+
+    var matches;
+    if (this.typeMap[type] !== undefined) {
+      return this.typeMap[type];
+    } else if (matches = type.match(/^(\w+)\((.+?)\)(.*)$/)) {
+      if (this.typeMap[matches[1]] !== undefined) {
+        return ('(' + matches[2] + ')').replace(/\(.+\)/, this.typeMap[matches[1]]) + matches[3];
+      }
+    } else if (matches = type.match(/^(\w+)\s+/)) {
+      if (this.typeMap[matches[1]] !== undefined) {
+        return this.typeMap[matches[1]].replace(/^\w+/, type);
+      }
+    }
+
+    return type;
   }
 
   /**

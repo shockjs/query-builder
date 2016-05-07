@@ -7,7 +7,7 @@ export class Command {
   }
 
   execute() {
-    console.log('query:', this._sql, this._params);
+    //console.log('query:', this._sql, this._params);
     return new Promise((resolve, reject) => {
       this._connection.query(this._sql, this._params, function(err, rows, fields) {
         if (err) {

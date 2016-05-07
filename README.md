@@ -1,7 +1,7 @@
 #Query Builder
 
 ![Build Status](https://travis-ci.org/shockjs/query-builder.svg)
-[![node](https://img.shields.io/badge/node-v5.5.0-blue.svg)]()
+[![node](https://img.shields.io/badge/node-v6.0.0-blue.svg)]()
 [![MySQL](https://img.shields.io/badge/MySQL-5.5-blue.svg)]()
 
 
