@@ -1,8 +1,8 @@
-import {Query} from "./dist/classes/query.class";
-import {SORT_ASC, SORT_DESC} from "./dist/constants";
+const Query = require("./src/classes/query.class").Query;
+const constants = require("./dist/constants");
 
-export {
-  Query,
-  SORT_ASC,
-  SORT_DESC
-}
+module.exports = {
+  Query: Query,
+  SORT_ASC: constants.SORT_ASC,
+  SORT_DESC: constants.SORT_DESC
+};
